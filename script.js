@@ -302,7 +302,7 @@ function startSession() {
     subHeading.textContent = language === 'en' ? 'Paraphrasing ChatGPT' : 'ChatGPT 패러프레이징';
     renderQuestions(container, session2Questions[language], true); // Pass true to indicate two input fields
   } else if (currentSession === 3) {
-    subHeading.textContent = language === 'en' ? 'Retyping ChatGPT' : 'ChatGPT 옮겨쓰기';
+    subHeading.textContent = language === 'en' ? 'Mimicry ChatGPT' : 'ChatGPT 옮겨쓰기';
     renderQuestions(container, session3Questions[language], true); // Pass true to indicate two input fields
   }
   heading.after(subHeading);
@@ -526,7 +526,7 @@ stopBtn1.addEventListener("click", () => {
       const rightDiv = document.createElement("div");
       rightDiv.className = "input-column right";
       const label2 = document.createElement("label");
-      label2.textContent = language === "en" ? "Paraphrased Version" : "버전 2";
+      label2.textContent = language === "en" ? "Transcribed Version" : "버전 2";
       rightDiv.appendChild(label2);
 
       // ---- Python CodeMirror Editor #2 ----
@@ -850,7 +850,7 @@ inputs.push({
 
 // --- Explanation Version 2 (old one, now labeled) ---
 const expV2Label = document.createElement("label");
-expV2Label.textContent = language === "en" ? "Paraphrased Version" : "버전 2";
+expV2Label.textContent = language === "en" ? "Transcribed Version" : "버전 2";
 questionDiv.appendChild(expV2Label);
 
 const explanationBoxV2 = document.createElement("textarea");
@@ -1060,7 +1060,7 @@ if (currentSession === 3) {
     console.log("Checking inputs for question", i, { code1, code2, exp1, exp2 });
 
     return {
-      session: 4,
+      session: sessionNumber,
       question: q,
       q_id: i + 1,
       code_version_1: code1?.element.getValue() || "",
