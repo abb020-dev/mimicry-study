@@ -3,82 +3,95 @@
 // -------------------------
 // Pyodide + Run-button code placed at the TOP (as requested)
 // -------------------------
+let pyWorker = null;
+let workerReady = false;
+// Global variables to store inputs, keystrokes, and user information
+const questionsMap = {};
+let inputs = [];
+let keystrokes = [];
+let currentSession = window.FORCED_SESSION || 1; //Session number for coding purposes
+sessionNumber = 3 //Session number for tracking purposes
+let userInfo = {};
+let totalQuestions = 0; // Track the total number of questions
+let language = 'en'; // Default language
+let lastViewportWidth = window.innerWidth;
+let lastViewportHeight = window.innerHeight;
+let lastDevicePixelRatio = window.devicePixelRatio;
+let lastViewportScale = window.visualViewport
+  ? window.visualViewport.scale
+  : 1;
+const questions = {};
 
-// ---- Pyodide setup ----
-let pyodide = null;
-let pyodideReady = false;
-
-async function loadPyodideAndPackages() {
-  try {
-    // Ensure indexURL matches the pyodide script you loaded in index.html
-    pyodide = await loadPyodide({ indexURL: 'https://cdn.jsdelivr.net/pyodide/v0.24.1/full/' });
-    // Optionally load micropip or other packages later:
-    // await pyodide.loadPackage(['micropip']);
-    pyodideReady = true;
-    console.log('Pyodide loaded');
-  } catch (e) {
-    console.error('Failed to load Pyodide:', e);
-  }
-}
-loadPyodideAndPackages();
-
-// Utility to run Python capturing stdout & exceptions
-async function runPythonCaptureOutput(code) {
-  if (!pyodideReady) {
-    throw new Error("Pyodide not loaded yet");
-  }
-
-  // Create a unique name to avoid collisions
-  const uid = Date.now().toString();
-  const outVar = `_output_${uid}`;
-
-  // Wrap code so we capture stdout manually
-  const wrapped =
-    `
-import sys, io, traceback
-${outVar} = io.StringIO()
-_old_stdout = sys.stdout
-sys.stdout = ${outVar}
-try:
-` +
-    code
-      .split("\n")
-      .map(line => "    " + line)
-      .join("\n") +
-    `
-except Exception as e:
-    sys.stdout = _old_stdout
-    raise e
-finally:
-    sys.stdout = _old_stdout
-
-${outVar}.getvalue()
-`;
-
-  try {
-    // If Python throws, this will throw a JS error
-    const result = await pyodide.runPythonAsync(wrapped);
-    return String(result || "");
-  } catch (pyError) {
-    // Convert Pyodide Python error into a clean JS error
-    let message = pyError.message || String(pyError);
-    // Optional cleanup: remove Pyodide internal lines
-    message = message.replace(/File.*line.*\n?/g, "");
-    throw new Error(message.trim());
-  }
-}
+const pendingRuns = {};
 
 function ensureCodeMirrorFocus(editor) {
-  const wrapper = editor.getWrapperElement();
+  const wrapper0 = editor.getWrapperElement();
 
-  wrapper.addEventListener("mousedown", () => {
+  wrapper0.addEventListener("mousemove", (e) => {
+  const now = Date.now();
+
+  if (now - editor._lastMouseLog > 100) {
+    editor._lastMouseLog = now;
+
+    const meta = editor._meta;
+
+    keystrokes.push({
+      s_n: sessionNumber, //Forcing session 4
+      r_t: meta.inputType,
+      q_id: meta.questionIndex + 1,
+      version: meta.version,
+
+      event_type: "mouse",
+
+      data: {
+        x: e.clientX,
+        y: e.clientY
+      },
+
+      timestamp: now
+    });
+  }
+});
+
+  wrapper0.addEventListener("mousedown", () => {
     setTimeout(() => {
       editor.focus();
       editor.refresh();
     }, 0);
   });
 }
+function setupWorker() {
+  workerReady = false;
+  pyWorker = new Worker("py-worker.js");
 
+  pyWorker.postMessage({
+    type: "init"
+  });
+
+  pyWorker.onmessage = (event) => {
+    const data = event.data;
+
+    if (data.type === "ready") {
+      workerReady = true;
+      return;
+    }
+
+    const run = pendingRuns[data.id];
+    if (!run) return;
+
+    const { outputElement } = run;
+
+    if (data.type === "result") {
+      outputElement.textContent = data.output;
+    }
+
+    if (data.type === "error") {
+      outputElement.textContent = data.error;
+    }
+
+    delete pendingRuns[data.id];
+  };
+}
 // -------------------------
 // The rest of your original application code
 // (keystroke logging, rendering, CodeMirror integration, downloads, translations, etc.)
@@ -167,83 +180,106 @@ let sessionInstructions = {
     ko: "요구된 단어수 까지 포함 각 질문을 복사하여 ChatGPT에 입력하십시오.\nChatGPT에서 생성된 응답을 복사하여 해당 질문의 첫 번째 입력 필드에 붙여넣기 하십시오.\n생성된 응답을 한 문장씩 차례로 보며 100~120단어 내외로 패러프레이즈 하십시오.\n패러프레이즈는 텍스트 자체의 의미를 잃지 않으면서 같은 텍스트를 다른 단어로 표현하는 것을 의미합니다.\n위와 같은 절차를 반복해서 각각의 질문에 답변을 하십시오.\n예상 소요 시간: 30~40분."
   },
   session3: {
-    en: "Paste your s1_responses file into ChatGPT along with this prompt: \"For the next 6 coding prompts and follow up explanation questions that I will ask you to answer, respond according to my explanation and coding style shown in the prompts in the file s1_responses that I just uploaded.\" \nAfter that, proceed as described in steps 3-7.\nCopy the question and directly paste it into ChatGPT.\nCopy the generated response from ChatGPT and paste it into the ChatGPT Version input field.\nIn the Transcribed Version input field, transcribe the generated response by word for word.\nRepeat steps 3-5 for each coding exercise and follow up question in this session.\nAnticipated duration: 30-40 minutes.",
+    en: "Paste your s1_responses file into ChatGPT along with this prompt: \"For the next 6 coding prompts and follow up explanation questions that I will ask you to answer, respond according to my explanation and coding style shown in the responses in the file s1_responses that I just uploaded.\" \nAfter that, proceed as described in steps 3-7.\nCopy the question, switch tabs to ChatGPT, and directly paste the question into ChatGPT.\nCopy the generated response from ChatGPT and paste it into the ChatGPT Version input field.\nIn the Transcribed Version input field, transcribe the generated ChatGPT response word for word.\nRepeat steps 3-7 for each coding exercise and follow up question in this session. Ensure to have your screen view on fullscreen and do not zoom in or out.\nAnticipated duration: 30-40 minutes.",
     ko: "요구된 단어수 까지 포함 각 질문을 복사하여 ChatGPT에 입력하십시오.\nChatGPT에서 생성된 응답을 복사하여 해당 질문의 첫 번째 입력 필드에 붙여넣기 하십시오.\nChatGPT에서 생성된 응답을 보며 해당 질문의 두번째 입력 필드에 그대로 다시 타이핑하십시오.\n위와 같은 절차를 반복해서 각각의 질문에 답변을 하십시오.\n예상 소요 시간: 30~40분."
   }
 };
 
-// Global variables to store inputs, keystrokes, and user information
-let inputs = [];
-let keystrokes = [];
-let currentSession = window.FORCED_SESSION || 1;
-let userInfo = {};
-let totalQuestions = 0; // Track the total number of questions
-let language = 'en'; // Default language
-
 // Function to log keystrokes, excluding first input in sessions 2 and 3
 // Function to log keystrokes, excluding first input in sessions 2 and 3
-function logKeystroke(event) {
-  let timestamp = Date.now();
-  let key = event.key;
+function logKeystroke(event, editor = null, element = null) {
 
-  if (event.key === "Tab") {
-    key = "INDENT";
-  }
-  
+  // ✅ 1. Get metadata
+  const meta = editor?._meta || element?._meta || {};
 
-  // Try to find the CodeMirror instance's textarea or underlying DOM node
-  // event.target will be a DOM node for native events; for CodeMirror keyboard events the 'event' passed by CodeMirror
-  // is usually a DOM KeyboardEvent; using event.target should work in most cases.
-  let inputIndex = inputs.findIndex(input => input.element === event.target || input.element.getInputElement && input.element.getInputElement && input.element.getInputElement?.() === event.target);
+  // ✅ 2. Get cursor position
+  let line = null;
+  let ch = null;
 
-  // If not found using direct target equality, we can attempt a fall-back: match by comparing CodeMirror.display.wrapper.contains(target)
-  if (inputIndex === -1) {
-    for (let i = 0; i < inputs.length; i++) {
-      const el = inputs[i].element;
-      if (el && el.getWrapperElement && typeof el.getWrapperElement === 'function') {
-        const wrapper = el.getWrapperElement();
-        if (wrapper && wrapper.contains && wrapper.contains(event.target)) {
-          inputIndex = i;
-          break;
-        }
-      }
-    }
+  if (editor && editor.getCursor) {
+    const cursor = editor.getCursor();
+    line = cursor.line;
+    ch = cursor.ch;
+  } else if (element && element.selectionStart != null) {
+    const text = element.value.substring(0, element.selectionStart);
+    const lines = text.split("\n");
+
+    line = lines.length - 1;
+    ch = lines[lines.length - 1].length;
   }
 
-  // Identify the current session questions
-  let questions;
-  if (currentSession === 1) {
-    questions = session1Questions[language];
-  } else if (currentSession === 2) {
-    questions = session2Questions[language];
-  } else if (currentSession === 3) {
-    questions = session3Questions[language];
-  }
+  // ✅ 3. Push data
+  keystrokes.push({
+    s_n: sessionNumber,
+    r_t: meta.inputType,
+    q_id: meta.questionIndex + 1,
+    version: meta.version,
 
-  let questionIndex = Math.floor((inputIndex - totalQuestions) / (currentSession === 1 ? 2 : 2));
-  let question = questions && questions[questionIndex] ? questions[questionIndex] : null;
+    event_type: "key",
 
-  // Skip logging for the first input field in sessions 2 and 3
-  if (currentSession !== 1) {
-    let isFirstInput = (inputIndex - totalQuestions) % 2 === 0;
-    if (isFirstInput) {
-      return; // Do not log keystrokes for the first input field
-    }
-  }
+    data: {
+      key: event.key,
+      code: event.code,
+      key_event_phase: event.type,
+      repeat: event.repeat,
+      line: line,
+      ch: ch
+    },
 
-let inputType = inputs[inputIndex]?.type || "unknown";
+    timestamp: Date.now()
+  });
+}
 
-keystrokes.push({
-  s_n: currentSession + 1,
-  q: question,
-  r_t: inputType, // 🔥 NEW: code vs explanation
-  q_n: (questionIndex + 1),
-  key: key,
-  code: event.code,
-  event: event.type,
-  timestamp: timestamp,
-  repeat: event.repeat
-});
+function logTextareaCursor(e) {
+  const el = e.target;
+  const meta = el._meta;
+
+  const pos = el.selectionStart;
+  const text = el.value;
+
+  const lines = text.substring(0, pos).split("\n");
+  const line = lines.length - 1;
+  const ch = lines[lines.length - 1].length;
+
+  keystrokes.push({
+    s_n: sessionNumber,
+    r_t: meta.inputType,
+    q_id: meta.questionIndex + 1,
+    version: meta.version,
+
+    event_type: "cursor",
+
+    data: {
+      line: line,
+      ch: ch
+    },
+
+    timestamp: Date.now()
+  });
+}
+function logEnvironmentChange(eventType) {
+
+  keystrokes.push({
+
+    s_n: sessionNumber,
+
+    r_t: "environment",
+    q_id: null,
+    version: null,
+
+    event_type: eventType,
+
+    data: {
+      viewportWidth: window.innerWidth,
+      viewportHeight: window.innerHeight,
+      devicePixelRatio: window.devicePixelRatio,
+      viewportScale: window.visualViewport
+        ? window.visualViewport.scale
+        : 1
+    },
+
+    timestamp: Date.now()
+  });
 }
 
 // Function to start the session after user information is captured
@@ -266,7 +302,7 @@ function startSession() {
     subHeading.textContent = language === 'en' ? 'Paraphrasing ChatGPT' : 'ChatGPT 패러프레이징';
     renderQuestions(container, session2Questions[language], true); // Pass true to indicate two input fields
   } else if (currentSession === 3) {
-    subHeading.textContent = language === 'en' ? 'ChatGPT with Mimicry' : 'ChatGPT 옮겨쓰기';
+    subHeading.textContent = language === 'en' ? 'Retyping ChatGPT' : 'ChatGPT 옮겨쓰기';
     renderQuestions(container, session3Questions[language], true); // Pass true to indicate two input fields
   }
   heading.after(subHeading);
@@ -284,8 +320,8 @@ submitButton.addEventListener('click', () => {
   } else if (currentSession === 2) {
     questions = session2Questions[language];
   } else {
-    questions = session3Questions[language];
-  }
+    questions = Object.values(questionsMap);
+}
 
   let twoInputs = currentSession !== 1;
 
@@ -302,7 +338,7 @@ submitButton.addEventListener('click', () => {
 }
 
 // Added Code: Fully replaced this function to add the code boxes to replace the text area boxes. Overall this is a function to render questions dynamically
-function renderQuestions(container, questions, twoInputs = false) {
+function renderQuestions(container, questions, twoInputs = false) {        // 🔥 also reset inputs (VERY important)
   container.innerHTML = "";
 
   // ===== Instruction Rendering =====
@@ -339,6 +375,7 @@ function renderQuestions(container, questions, twoInputs = false) {
 
   // ===== Question Rendering =====
   questions.forEach((q, i) => {
+    questionsMap[i + 1] = q;
     const questionDiv = document.createElement("div");
     questionDiv.className = "question-block";
 
@@ -363,82 +400,133 @@ function renderQuestions(container, questions, twoInputs = false) {
       leftDiv.appendChild(textarea1);
 
       let editor1 = CodeMirror.fromTextArea(textarea1, {
-  lineNumbers: true,
-  mode: "python",
-  theme: "default",
-  indentUnit: 4,
-  smartIndent: true,
-  indentWithTabs: false,
-  extraKeys: {
-  Tab: function(cm) {
-    cm.replaceSelection("    ");
-  },
-  Backspace: function(cm) {
-    let cursor = cm.getCursor();
-    let line = cm.getLine(cursor.line);
+        lineNumbers: true,
+        mode: "python",
+        theme: "default",
+        indentUnit: 4,
+        smartIndent: true,
+        indentWithTabs: false,
+        extraKeys: {
+        Tab: function(cm) {
+          cm.replaceSelection("    ");
+        },
+        Backspace: function(cm) {
+          let cursor = cm.getCursor();
+          let line = cm.getLine(cursor.line);
 
-    if (cursor.ch >= 4 && line.slice(cursor.ch - 4, cursor.ch) === "    ") {
-      cm.replaceRange("", {line: cursor.line, ch: cursor.ch - 4}, cursor);
-    } else {
-      cm.execCommand("delCharBefore");
-    }
-  }
+          if (cursor.ch >= 4 && line.slice(cursor.ch - 4, cursor.ch) === "    ") {
+            cm.replaceRange("", {line: cursor.line, ch: cursor.ch - 4}, cursor);
+          } else {
+            cm.execCommand("delCharBefore");
+          }
+        }
 }
 });
-      
+      editor1._meta = {
+        inputType: "code",
+        version: 1,
+        questionIndex: i,
+      };
+      //questions[i + 1] = q
+      editor1._lastMouseLog = 0;
+
       ensureCodeMirrorFocus(editor1);
+
+      const wrapper1 = editor1.getWrapperElement();
+
       //Added Code: fully added both editor1on functions
         editor1.on('change', () => {
           updateWordCountEditor(editor1, wordCountDiv);
         });
-        editor1.on('keydown', (instance, e) => {
-          // e is a DOM event; pass it for keystroke logging
-          try { logKeystroke(e); } catch (err) { /* non-fatal */ }
-        });
-        editor1.on('keyup', (instance, e) => {
-          // e is a DOM event; pass it for keystroke logging
-          try { logKeystroke(e); } catch (err) { /* non-fatal */ }
+        editor1.on('keydown', (cm, e) => {
+          try { logKeystroke(e, cm); } catch (err) {}
         });
 
+        editor1.on('keyup', (cm, e) => {
+          try { logKeystroke(e, cm); } catch (err) {}
+        });
+        editor1.on("cursorActivity", (cm) => {
+          const meta = editor1._meta;
+          const cursor = cm.getCursor();
 
-      // --------- Run button & output for editor1 ---------
-      const runBtn1 = document.createElement('button');
-      runBtn1.className = 'runBtn';
-      runBtn1.textContent = language === 'en' ? 'Run' : '실행 (버전1)';
-      leftDiv.appendChild(runBtn1);
+          keystrokes.push({
+            s_n: sessionNumber,
+            r_t: meta.inputType,
+            q_id: meta.questionIndex + 1,
+            version: meta.version,
 
-      const output1 = document.createElement('pre');
-      output1.className = 'outputBox';
-      leftDiv.appendChild(output1);
-  runBtn1.addEventListener("click", async () => {
+            event_type: "cursor",
+
+            data: {
+              line: cursor.line,
+              ch: cursor.ch
+            },
+
+            timestamp: Date.now()
+          });
+        });
+      // --------- Run button & output ---------hello 
+const runBtn1 = document.createElement('button');
+runBtn1.textContent = "Run";
+
+const stopBtn1 = document.createElement("button");
+stopBtn1.textContent = "Stop";
+
+const output1 = document.createElement("pre");
+output1.className = "outputBox";
+
+leftDiv.appendChild(runBtn1);
+leftDiv.appendChild(stopBtn1);
+leftDiv.appendChild(output1);
+
+let currentRunId1 = null;
+
+runBtn1.addEventListener("click", () => {
   const code = editor1.getValue().trim();
 
-  if (!pyodideReady) {
-    output1.textContent = "Pyodide is still loading...";
+  if (!workerReady) {
+    output1.textContent = "Python still loading... Press run button again.";
     return;
   }
 
+  const runId = Date.now() + Math.random();
+  currentRunId1 = runId;
+
   output1.textContent = "Running...";
 
-  try {
-    const out = await runPythonCaptureOutput(code);
-    output1.textContent = out || "";
-  } catch (err) {
-    let cleanMessage = "Your code contains an error.\n\n";
-    if (err.message) {
-      const lines = err.message.split("\n");
-      cleanMessage += lines[lines.length - 1].trim();
-    }
-    output1.textContent = cleanMessage;
-  }
+  pendingRuns[runId] = {
+    outputElement: output1
+  };
+
+  pyWorker.postMessage({
+    type: "run",
+    code: code,
+    id: runId
+  });
 });
-      inputs.push({ question: q, element: editor1, type: "code", version: 1 });
+
+stopBtn1.addEventListener("click", () => {
+  if (pyWorker) {
+    pyWorker.terminate();
+  }
+
+  setupWorker(); 
+
+  output1.textContent += "\n[Execution stopped]\n";
+});
+      inputs.push({ 
+        question: q, 
+        questionIndex: i,
+        element: editor1, 
+        type: "code", 
+        version: 1 
+      });
 
       // Right input column
       const rightDiv = document.createElement("div");
       rightDiv.className = "input-column right";
       const label2 = document.createElement("label");
-      label2.textContent = language === "en" ? "Transcribed Version" : "버전 2";
+      label2.textContent = language === "en" ? "Paraphrased Version" : "버전 2";
       rightDiv.appendChild(label2);
 
       // ---- Python CodeMirror Editor #2 ----
@@ -446,30 +534,57 @@ function renderQuestions(container, questions, twoInputs = false) {
       rightDiv.appendChild(textarea2);
 
       let editor2 = CodeMirror.fromTextArea(textarea2, {
-  lineNumbers: true,
-  mode: "python",
-  theme: "default",
-  indentUnit: 4,
-  smartIndent: true,
-  indentWithTabs: false,
-  extraKeys: {
-  Tab: function(cm) {
-    cm.replaceSelection("    ");
-  },
-  Backspace: function(cm) {
-    let cursor = cm.getCursor();
-    let line = cm.getLine(cursor.line);
+        lineNumbers: true,
+        mode: "python",
+        theme: "default",
+        indentUnit: 4,
+        smartIndent: true,
+        indentWithTabs: false,
+        extraKeys: {
+        Tab: function(cm) {
+          cm.replaceSelection("    ");
+        },
+        Backspace: function(cm) {
+          let cursor = cm.getCursor();
+          let line = cm.getLine(cursor.line);
 
-    if (cursor.ch >= 4 && line.slice(cursor.ch - 4, cursor.ch) === "    ") {
-      cm.replaceRange("", {line: cursor.line, ch: cursor.ch - 4}, cursor);
-    } else {
-      cm.execCommand("delCharBefore");
-    }
-  }
-}
+          if (cursor.ch >= 4 && line.slice(cursor.ch - 4, cursor.ch) === "    ") {
+            cm.replaceRange("", {line: cursor.line, ch: cursor.ch - 4}, cursor);
+          } else {
+            cm.execCommand("delCharBefore");
+          }
+        }
+      }
 });
+editor2._meta = {
+  inputType: "code",
+  version: 2,
+  questionIndex: i,
+};
+//questions[i + 1] = q;
+editor2._lastMouseLog = 0;
       
       ensureCodeMirrorFocus(editor2);
+      editor2.on("cursorActivity", (cm) => {
+        const meta = editor2._meta;
+        const cursor = cm.getCursor();
+
+        keystrokes.push({
+          s_n: sessionNumber,
+          r_t: meta.inputType,
+          q_id: meta.questionIndex + 1,
+          version: meta.version,
+
+          event_type: "cursor",
+
+          data: {
+            line: cursor.line,
+            ch: cursor.ch
+          },
+
+          timestamp: Date.now()
+        });
+      });
       // 🔒 Disable copy / paste / cut (single editor)
 editor2.on("beforeChange", (cm, change) => {
   if (change.origin === "paste") {
@@ -477,53 +592,77 @@ editor2.on("beforeChange", (cm, change) => {
   }
 });
 
-const wrapper = editor2.getWrapperElement();
-wrapper.addEventListener("paste", e => e.preventDefault());
-wrapper.addEventListener("copy",  e => e.preventDefault());
-wrapper.addEventListener("cut",   e => e.preventDefault());
+const wrapper2 = editor2.getWrapperElement();
+wrapper2.addEventListener("paste", e => e.preventDefault());
+wrapper2.addEventListener("copy",  e => e.preventDefault());
+wrapper2.addEventListener("cut",   e => e.preventDefault());
       //Added Code: Fully added editor 2 on
       editor2.on('change', () => {
         updateWordCountEditor(editor2, wordCountDiv);
       });
-      editor2.on('keydown', (instance, e) => {
-          try { logKeystroke(e); } catch (err) { /* non-fatal */ }
-          });
-      editor2.on('keyup', (instance, e) => {
-          try { logKeystroke(e); } catch (err) { /* non-fatal */ }
-          });
+      editor2.on('keydown', (cm, e) => {
+          try { logKeystroke(e, cm); } catch (err) {}
+        });
 
-      // --------- Run button & output for editor2 ---------
-      const runBtn2 = document.createElement('button');
-      runBtn2.className = 'runBtn';
-      runBtn2.textContent = language === 'en' ? 'Run' : '실행 (버전2)';
-      rightDiv.appendChild(runBtn2);
+      editor2.on('keyup', (cm, e) => {
+          try { logKeystroke(e, cm); } catch (err) {}
+        });
+    const runBtn2 = document.createElement("button");
+runBtn2.textContent = "Run";
 
-      const output2 = document.createElement('pre');
-      output2.className = 'outputBox';
-      rightDiv.appendChild(output2);
-     runBtn2.addEventListener("click", async () => {
+const stopBtn2 = document.createElement("button");
+stopBtn2.textContent = "Stop";
+
+const output2 = document.createElement("pre");
+output2.className = "outputBox";
+
+rightDiv.appendChild(runBtn2);
+rightDiv.appendChild(stopBtn2);
+rightDiv.appendChild(output2);
+
+let currentRunId2 = null;
+
+runBtn2.addEventListener("click", () => {
   const code = editor2.getValue().trim();
 
-  if (!pyodideReady) {
-    output2.textContent = "Pyodide is still loading...";
+  if (!workerReady) {
+    output2.textContent = "Python still loading... Press run button again.";
     return;
   }
 
+  const runId = Date.now() + Math.random();
+  currentRunId2 = runId;
+
   output2.textContent = "Running...";
 
-  try {
-    const out = await runPythonCaptureOutput(code);
-    output2.textContent = out || "";
-  } catch (err) {
-    let cleanMessage = "Your code contains an error.\n\n";
-    if (err.message) {
-      const lines = err.message.split("\n");
-      cleanMessage += lines[lines.length - 1].trim();
-    }
-    output2.textContent = cleanMessage;
-  }
+  pendingRuns[runId] = {
+    outputElement: output2
+  };
+
+  pyWorker.postMessage({
+    type: "run",
+    code: code,
+    id: runId
+  });
 });
-     inputs.push({ question: q, element: editor2, type: "code", version: 2 }); 
+
+stopBtn2.addEventListener("click", () => {
+  if (pyWorker) {
+    pyWorker.terminate();
+  }
+
+  setupWorker();
+
+  output2.textContent += "\n[Execution stopped]\n";
+});
+
+     inputs.push({ 
+      question: q, 
+      questionIndex: i,
+      element: editor2, 
+      type: "code", 
+      version: 2 
+    });
 
       const dualDiv = document.createElement("div");
       dualDiv.className = "dual-input";
@@ -542,7 +681,34 @@ wrapper.addEventListener("cut",   e => e.preventDefault());
     indentUnit: 4,
     smartIndent: true,
   });
+  editor._meta = {
+    inputType: "code",
+    version: 1,
+    questionIndex: i,
+  };
+  //questions[i + 1] = q;
+  editor._lastMouseLog = 0;
 ensureCodeMirrorFocus(editor);
+editor.on("cursorActivity", (cm) => {
+  const meta = editor._meta;
+  const cursor = cm.getCursor();
+
+  keystrokes.push({
+    s_n: sessionNumber,
+    r_t: meta.inputType,
+    q_id: meta.questionIndex + 1,
+    version: meta.version,
+
+    event_type: "cursor",
+
+    data: {
+      line: cursor.line,
+      ch: cursor.ch
+    },
+
+    timestamp: Date.now()
+  });
+});
 
   // 🔥 Add live word count
   editor.on("change", () => {
@@ -550,43 +716,71 @@ ensureCodeMirrorFocus(editor);
   });
 
   // 🔥 Add keystroke logging for Session 1
-  editor.on("keydown", (instance, e) => {
-    logKeystroke(e);
+  editor.on('keydown', (cm, e) => {
+    try { logKeystroke(e, cm); } catch (err) {}
+  });
+
+  editor.on('keyup', (cm, e) => {
+    try { logKeystroke(e, cm); } catch (err) {}
   });
 
   // ---- Run button + output ----
   const runBtn = document.createElement("button");
-  runBtn.className = "runBtn";
-  runBtn.textContent = language === "en" ? "Run" : "실행";
-  questionDiv.appendChild(runBtn);
+runBtn.textContent = "Run";
 
-  const outputSingle = document.createElement("pre");
-  outputSingle.className = "outputBox";
-  questionDiv.appendChild(outputSingle);
-runBtn.addEventListener("click", async () => {
+const stopBtn = document.createElement("button");
+stopBtn.textContent = "Stop";
+
+const outputSingle = document.createElement("pre");
+outputSingle.className = "outputBox";
+
+questionDiv.appendChild(runBtn);
+questionDiv.appendChild(stopBtn);
+questionDiv.appendChild(outputSingle);
+
+let currentRunId = null;
+
+runBtn.addEventListener("click", () => {
   const code = editor.getValue().trim();
 
-  if (!pyodideReady) {
-    outputSingle.textContent = "Pyodide is still loading...";
+  if (!workerReady) {
+    outputSingle.textContent = "Python still loading... Press run button again.";
     return;
   }
 
+  const runId = Date.now() + Math.random();
+  currentRunId = runId;
+
   outputSingle.textContent = "Running...";
 
-  try {
-    const out = await runPythonCaptureOutput(code);
-    outputSingle.textContent = out || "";
-  } catch (err) {
-    let cleanMessage = "Your code contains an error.\n\n";
-    if (err.message) {
-      const lines = err.message.split("\n");
-      cleanMessage += lines[lines.length - 1].trim();
-    }
-    outputSingle.textContent = cleanMessage;
-  }
+  pendingRuns[runId] = {
+    outputElement: outputSingle
+  };
+
+  pyWorker.postMessage({
+    type: "run",
+    code: code,
+    id: runId
+  });
 });
 
-  inputs.push({ question: q, element: editor, type: "code", version: 1 });
+stopBtn.addEventListener("click", () => {
+  if (pyWorker) {
+    pyWorker.terminate();
+  }
+
+  setupWorker(); 
+
+  outputSingle.textContent += "\n[Execution stopped]\n";
+});
+
+  inputs.push({ 
+    question: q, 
+    questionIndex: i,
+    element: editor, 
+    type: "code", 
+    version: 1 
+  });
 } 
 // ===============================
 // Explanation section (TEXT INPUT) - NOW TWO VERSIONS
@@ -594,7 +788,7 @@ runBtn.addEventListener("click", async () => {
 const explanationLabel = document.createElement("div");
 explanationLabel.className = "explanation-label";
 explanationLabel.textContent =
-  `For Prompt ${i + 1}, explain line by line what the code does. ` +
+  `For Prompt ${i + 1}, explain line by line what the code does using plain text. ` +
   `Describe the purpose of each significant line or function.`;
 questionDiv.appendChild(explanationLabel);
 
@@ -608,11 +802,47 @@ explanationBoxV1.className = "explanation-box";
 explanationBoxV1.rows = 6;
 questionDiv.appendChild(explanationBoxV1);
 
-explanationBoxV1.addEventListener("keydown", logKeystroke);
-explanationBoxV1.addEventListener("keyup", logKeystroke);
+explanationBoxV1._meta = {
+  inputType: "explanation",
+  version: 1,
+  questionIndex: i,
+};
+//questions[i + 1] = q;
+explanationBoxV1._lastMouseLog = 0;
+
+explanationBoxV1.addEventListener("keydown", (e) => logKeystroke(e, null, explanationBoxV1));
+explanationBoxV1.addEventListener("keyup", (e) => logKeystroke(e, null, explanationBoxV1));
+explanationBoxV1.addEventListener("click", logTextareaCursor);
+
+explanationBoxV1.addEventListener("mousemove", (e) => {
+  const now = Date.now();
+
+  if (now - explanationBoxV1._lastMouseLog > 100) {
+    explanationBoxV1._lastMouseLog = now;
+
+    const meta = explanationBoxV1._meta;
+
+    keystrokes.push({
+      s_n: sessionNumber,
+      r_t: meta.inputType,
+      q_id: meta.questionIndex + 1,
+      version: meta.version,
+
+      event_type: "mouse",
+
+      data: {
+        x: e.clientX,
+        y: e.clientY
+      },
+
+      timestamp: now
+    });
+  }
+});
 
 inputs.push({
   question: q,
+  questionIndex: i,
   element: explanationBoxV1,
   type: "explanation",
   version: 1
@@ -620,7 +850,7 @@ inputs.push({
 
 // --- Explanation Version 2 (old one, now labeled) ---
 const expV2Label = document.createElement("label");
-expV2Label.textContent = language === "en" ? "Transcribed Version" : "버전 2";
+expV2Label.textContent = language === "en" ? "Paraphrased Version" : "버전 2";
 questionDiv.appendChild(expV2Label);
 
 const explanationBoxV2 = document.createElement("textarea");
@@ -631,11 +861,47 @@ explanationBoxV2.addEventListener("paste", (e) => e.preventDefault());
 explanationBoxV2.addEventListener("copy",  (e) => e.preventDefault());
 explanationBoxV2.addEventListener("cut",   (e) => e.preventDefault());
 
-explanationBoxV2.addEventListener("keydown", logKeystroke);
-explanationBoxV2.addEventListener("keyup", logKeystroke);
+explanationBoxV2._meta = {
+  inputType: "explanation",
+  version: 2,
+  questionIndex: i,
+};
+//questions[i + 1] = q;
+explanationBoxV2._lastMouseLog = 0;
+
+explanationBoxV2.addEventListener("keydown", (e) => logKeystroke(e, null, explanationBoxV2));
+explanationBoxV2.addEventListener("keyup", (e) => logKeystroke(e, null, explanationBoxV2));
+explanationBoxV2.addEventListener("click", logTextareaCursor);
+
+explanationBoxV2.addEventListener("mousemove", (e) => {
+  const now = Date.now();
+
+  if (now - explanationBoxV2._lastMouseLog > 100) {
+    explanationBoxV2._lastMouseLog = now;
+
+    const meta = explanationBoxV2._meta;
+
+    keystrokes.push({
+      s_n: sessionNumber,
+      r_t: meta.inputType,
+      q_id: meta.questionIndex + 1,
+      version: meta.version,
+
+      event_type: "mouse",
+
+      data: {
+        x: e.clientX,
+        y: e.clientY
+      },
+
+      timestamp: now
+    });
+  }
+});
 
 inputs.push({
   question: q,
+  questionIndex: i,
   element: explanationBoxV2,
   type: "explanation",
   version: 2
@@ -669,18 +935,27 @@ function updateWordCountEditor(editor, wordCountDiv) {
 
 // Function to check if all questions are answered
 function checkAllAnswered(questions, twoInputs = false) {
-  let startIndex = totalQuestions;
-  let inputsPerQuestion = twoInputs ? 4 : 2; // code v1 + code v2 + expl v1 + expl v2
-  let endIndex = startIndex + questions.length * inputsPerQuestion;
+  return questions.every((q, i) => {
 
-  return inputs
-    .slice(startIndex, endIndex)
-    .every(input => {
+    const relatedInputs = inputs.filter(inp =>
+      inp.questionIndex === i
+    );
+
+    // 🔥 Expectation check (prevents ghost/extra question bugs)
+    const expectedCount = twoInputs ? 4 : 2;
+
+    if (relatedInputs.length !== expectedCount) {
+      console.warn("Wrong number of inputs for question", i, relatedInputs);
+      return false;
+    }
+
+    return relatedInputs.every(input => {
       if (input.type === "explanation") {
         return input.element.value.trim() !== "";
       }
       return input.element.getValue().trim() !== "";
     });
+  });
 }
 
 // Function to create download link
@@ -711,14 +986,22 @@ function createDownloadButton(blob, filename, buttonText) {
   });
   return button;
 }
-
+function getInput(qIndex, type, version) {
+  return inputs.find(inp =>
+    inp.type === type &&
+    inp.version === version &&
+    inp.element._meta.questionIndex === qIndex
+  );
+}
 // Function to submit form data
 function submitForm() {
+  console.log(inputs);
+  //console.log("CURRENT SESSION:", currentSession);- check to see it was session 3
   const session1ResponseStartIndex = 0;
   const session2ResponseStartIndex = session1Questions[language].length;
   const session3ResponseStartIndex = session1Questions[language].length + session2Questions[language].length * 2;
 //Added Code: Changed every value to getValue()
-  if (checkAllAnswered(session3Questions[language], true)) {
+  if (checkAllAnswered(Object.values(questionsMap), true)) {
     let responses;
 
 if (currentSession === 1) {
@@ -734,7 +1017,7 @@ if (currentSession === 1) {
 
 if (currentSession === 2) {
   responses = session2Questions[language].map((q, i) => ({
-  session: 2,
+  session: sessionNumber,
   question: q,
   code_version_1: inputs[i * 4].element.getValue(),
   code_version_2: inputs[i * 4 + 1].element.getValue(),
@@ -744,22 +1027,57 @@ if (currentSession === 2) {
 }
 
 if (currentSession === 3) {
-  responses = session3Questions[language].map((q, i) => ({
-  s: 4,
-  q: q,
-  q_n: i + 1,
-  chatgptAnswer: inputs[i * 4].element.getValue(),
-  retype: inputs[i * 4 + 1].element.getValue(),
-  explanation_version_1: inputs[i * 4 + 2].element.value,
-  explanation_version_2: inputs[i * 4 + 3].element.value
-}));
+
+  const totalQuestions = Object.keys(questionsMap).length;
+
+  responses = Array.from({ length: totalQuestions }, (_, i) => {
+  const q = questionsMap[i + 1];
+
+  const code1 = inputs.find(inp =>
+    inp.questionIndex === i &&
+    inp.type === "code" &&
+    inp.version === 1
+  );
+
+  const code2 = inputs.find(inp =>
+    inp.questionIndex === i &&
+    inp.type === "code" &&
+    inp.version === 2
+  );
+
+  const exp1 = inputs.find(inp =>
+    inp.questionIndex === i &&
+    inp.type === "explanation" &&
+    inp.version === 1
+  );
+
+  const exp2 = inputs.find(inp =>
+    inp.questionIndex === i &&
+    inp.type === "explanation" &&
+    inp.version === 2
+  );
+
+    console.log("Checking inputs for question", i, { code1, code2, exp1, exp2 });
+
+    return {
+      s: 4,
+      q: q,
+      q_id: i + 1,
+      chatgptAnswer: code1?.element.getValue() || "",
+      retype: code2?.element.getValue() || "",
+      explanation_version_1: exp1?.element.value || "",
+      explanation_version_2: exp2?.element.value || ""
+    };
+  });
 }
     let responseData = {
-      responses: responses
+      responses: responses,
+      questions: questionsMap
     };
 
     let keystrokeData = {
-      keystrokes: keystrokes
+      keystrokes: keystrokes,
+      questions: questionsMap
     };
 
     // Capture user information
@@ -767,8 +1085,16 @@ if (currentSession === 3) {
       gender: document.querySelector('input[name="gender"]:checked').value,
       age: document.getElementById('age').value,
       handedness: document.querySelector('input[name="handedness"]:checked').value,
-      // Added code: commented out korean profieciency koreanProficiency: document.getElementById('korean-proficiency').value,
-      // Added code: commented out education level educationLevel: document.getElementById('education-level').value
+
+      // ✅ Screen / viewport data (ADDED)
+      viewportWidth: window.innerWidth,
+      viewportHeight: window.innerHeight,
+      screenWidth: window.screen.width,
+      screenHeight: window.screen.height,
+      devicePixelRatio: window.devicePixelRatio,
+      viewportScale: window.visualViewport
+        ? window.visualViewport.scale
+        : 1
     };
 
     // Convert data to JSON format
@@ -787,9 +1113,9 @@ if (currentSession === 3) {
     let userInfoUrl = URL.createObjectURL(userInfoBlob);
 
     // Create link elements to trigger the downloads
-    createDownloadLink(responseBlob, 's4_responses.json');
+    createDownloadLink(responseBlob, 's3_responses.json');
     createDownloadLink(keystrokeBlob, 's3_keystrokes.json');
-    createDownloadLink(userInfoBlob, 's4_user_info.json');
+    createDownloadLink(userInfoBlob, 's3_user_info.json');
 
     // Show thank you message with buttons to manually download files if needed
     showThankYouMessage(responseBlob, keystrokeBlob, userInfoBlob);
@@ -812,9 +1138,9 @@ function showThankYouMessage(responseBlob, keystrokeBlob, userInfoBlob) {
 
   let list = document.createElement('ul');
   list.innerHTML = `
-    <li>s4_responses.json</li>
-    <li>s4_keystrokes.json</li>
-    <li>s4_user_info.json</li>
+    <li>s3_responses.json</li>
+    <li>s3_keystrokes.json</li>
+    <li>s3_user_info.json</li>
   `;
   container.appendChild(list);
 
@@ -822,9 +1148,9 @@ function showThankYouMessage(responseBlob, keystrokeBlob, userInfoBlob) {
   let buttonContainer = document.createElement('div');
   buttonContainer.className = 'button-container';
 
-  buttonContainer.appendChild(createDownloadButton(responseBlob, 's4_responses.json', language === 'en' ? 'Download Responses' : '응답 데이터 다운로드'));
-  buttonContainer.appendChild(createDownloadButton(keystrokeBlob, 's4_keystrokes.json', language === 'en' ? 'Download Keystrokes' : '키 데이터 다운로드'));
-  buttonContainer.appendChild(createDownloadButton(userInfoBlob, 's4_user_info.json', language === 'en' ? 'Download Demographics' : '사용자 정보 다운로드'));
+  buttonContainer.appendChild(createDownloadButton(responseBlob, 's3_responses.json', language === 'en' ? 'Download Responses' : '응답 데이터 다운로드'));
+  buttonContainer.appendChild(createDownloadButton(keystrokeBlob, 's3_keystrokes.json', language === 'en' ? 'Download Keystrokes' : '키 데이터 다운로드'));
+  buttonContainer.appendChild(createDownloadButton(userInfoBlob, 's3_user_info.json', language === 'en' ? 'Download Demographics' : '사용자 정보 다운로드'));
 
   container.appendChild(buttonContainer);
 
@@ -838,13 +1164,30 @@ function showThankYouMessage(responseBlob, keystrokeBlob, userInfoBlob) {
 // Function to show alert message
 function showAlert(message) {
   let alertDiv = document.querySelector('.alert');
+
   if (!alertDiv) {
     alertDiv = document.createElement('div');
     alertDiv.className = 'alert';
-    document.querySelector('.container').appendChild(alertDiv); // Append alert to the main container
+    document.querySelector('.container').appendChild(alertDiv);
   }
+
   alertDiv.textContent = message;
   alertDiv.style.display = 'block';
+  alertDiv.style.opacity = '1';
+
+  // Clear previous timers
+  if (alertDiv._fadeTimeout) clearTimeout(alertDiv._fadeTimeout);
+  if (alertDiv._hideTimeout) clearTimeout(alertDiv._hideTimeout);
+
+  // Fade
+  alertDiv._fadeTimeout = setTimeout(() => {
+    alertDiv.style.opacity = '0';
+  }, 2500);
+
+  // Hide
+  alertDiv._hideTimeout = setTimeout(() => {
+    alertDiv.style.display = 'none';
+  }, 3000);
 }
 
 // Function to hide alert message
@@ -874,6 +1217,7 @@ function attachParticipateHandler() {
 
 // Event listener when DOM is fully loaded
 document.addEventListener('DOMContentLoaded', () => {
+  setupWorker(); 
   attachParticipateHandler();
 
   const userInfoForm = document.getElementById('userInfoForm');
@@ -886,6 +1230,43 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // Initialize input listeners for each input field using event delegation
   initializeEventListeners();
+  window.addEventListener("resize", () => {
+
+    const currentScale = window.visualViewport
+      ? window.visualViewport.scale
+      : 1;
+
+    if (
+      window.innerWidth !== lastViewportWidth ||
+      window.innerHeight !== lastViewportHeight ||
+      window.devicePixelRatio !== lastDevicePixelRatio ||
+      currentScale !== lastViewportScale
+    ) {
+
+      lastViewportWidth = window.innerWidth;
+      lastViewportHeight = window.innerHeight;
+      lastDevicePixelRatio = window.devicePixelRatio;
+      lastViewportScale = currentScale;
+
+      logEnvironmentChange("environment_change");
+    }
+  });
+  if (window.visualViewport) {
+
+  window.visualViewport.addEventListener("resize", () => {
+
+    const currentScale = window.visualViewport.scale;
+
+    if (currentScale !== lastViewportScale) {
+      lastViewportWidth = window.innerWidth;
+      lastViewportHeight = window.innerHeight;
+      lastDevicePixelRatio = window.devicePixelRatio;
+      lastViewportScale = currentScale;
+
+      logEnvironmentChange("environment_change");
+    }
+  });
+}
 });
 
 // Function to validate user information form
@@ -981,7 +1362,7 @@ function translateContent(lang) {
     'ChatGPT 패러프레이징 세션: 이 세션에서는 참가자들은 각 질문을 ChatGPT에 입력한 후, 생성된 답변을 패러프레이징 해야 합니다. 이때 패러프레이징이란 원래 문장의 의미를 유지하면서도 다른 어휘와 문장 구조를 사용하여 표현하는 것을 의미합니다.';
   const s3desc = document.getElementById('session3-description');
   if (s3desc) s3desc.textContent = lang === 'en' ? 
-    'Retyping ChatGPT Session: In this session, participants will feed each prompt to ChatGPT, then retype the generated response, focusing on accurately transcribing the provided answers.' : 
+    'In this session, participants will feed each question to ChatGPT, then paraphrase the generated response. Paraphrasing is the act of restructuring existing code without changing its external behavior.' : 
     'ChatGPT 옮겨쓰기 세션: 이 세션에서 참가자들은 각 질문을 ChatGPT에 입력한 후, 생성된 답변을 그대로 재작성할 것입니다.';
 
   // Translate evaluation criteria
