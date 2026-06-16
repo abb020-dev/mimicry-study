@@ -188,7 +188,7 @@ input[type="radio"], input[type="number"], select {
   background-color: var(#282a36);
   color: var(#f8f8f2);
   box-shadow: 0 0 6px rgba(0,0,0,0.1);
-  height: 200px;        /* or 300px depending on question length */
+  height: 360px;        /* or 300px depending on question length */
   width: 100%;
   overflow: auto;
 }
