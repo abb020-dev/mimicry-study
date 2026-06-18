@@ -470,7 +470,7 @@ const runBtn1 = document.createElement('button');
 runBtn1.textContent = "Run";
 
 const stopBtn1 = document.createElement("button");
-stopBtn1.textContent = "Stop";
+stopBtn1.textContent = "Stop/Clear";
 
 const output1 = document.createElement("pre");
 output1.className = "outputBox";
@@ -614,7 +614,7 @@ wrapper2.addEventListener("cut",   e => e.preventDefault());
 runBtn2.textContent = "Run";
 
 const stopBtn2 = document.createElement("button");
-stopBtn2.textContent = "Stop";
+stopBtn2.textContent = "Stop/Clear";
 
 const output2 = document.createElement("pre");
 output2.className = "outputBox";
@@ -735,7 +735,7 @@ editor.on("cursorActivity", (cm) => {
 runBtn.textContent = "Run";
 
 const stopBtn = document.createElement("button");
-stopBtn.textContent = "Stop";
+stopBtn.textContent = "Stop/Clear";
 
 const outputSingle = document.createElement("pre");
 outputSingle.className = "outputBox";
