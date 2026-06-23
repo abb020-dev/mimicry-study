@@ -206,16 +206,16 @@ After implementing both versions:
 
 Use this starting data:
 
-\t1. roster = []
-\t2. actions = [
-\t3.     ["add", "Ashley"],
-\t4.     ["add", "Hayden"],
-\t5.     ["add", "Bob"],
-\t6.     ["show"],
-\t7.     ["remove", "Hayden"],
-\t8.     ["remove", "Claire"],
-\t9.     ["show"]
-\t10. ]
+\troster = []
+\tactions = [
+\t    ["add", "Ashley"],
+\t    ["add", "Hayden"],
+\t    ["add", "Bob"],
+\t    ["show"],
+\t    ["remove", "Hayden"],
+\t    ["remove", "Claire"],
+\t    ["show"]
+\t]
 
 Your program must:
 <ul>
