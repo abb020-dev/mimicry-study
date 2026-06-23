@@ -159,8 +159,8 @@ Use the <strong>+ operator</strong> to combine the two strings into a third vari
 
 Add two comments:
 <ul>
-  <li>One comment explaining how the <strong>+ operator</strong> works with strings</li>
-  <li>One comment explaining how the final combined string is created</li>
+<li>One comment explaining how the <strong>+ operator</strong> works with strings</li>
+<li>One comment explaining how the final combined string is created</li>
 </ul>
 Use descriptive variable names.`,
 
@@ -168,9 +168,9 @@ Use descriptive variable names.`,
 
 Your function must:
 <ul>
-  <li>Use a loop</li>
-  <li>Use a running product variable</li>
-  <li>Return the final product</li>
+<li>Use a loop</li>
+<li>Use a running product variable</li>
+<li>Return the final product</li>
 </ul>
 After defining the function, call it with two different lists and print both results.`,
 
@@ -178,15 +178,15 @@ After defining the function, call it with two different lists and print both res
 
 The <strong>evens_and_odds(numbers)</strong> function must:
 <ul>
-  <li>Create two lists called <strong>evens</strong> and <strong>odds</strong></li>
-  <li>Use a loop to process the original list</li>
-  <li>Use an if statement to determine whether each number is even or odd</li>
-  <li>Return both lists</li>
+<li>Create two lists called <strong>evens</strong> and <strong>odds</strong></li>
+<li>Use a loop to process the original list</li>
+<li>Use an if statement to determine whether each number is even or odd</li>
+<li>Return both lists</li>
 </ul>
 The <strong>main()</strong> function must:
 <ul>
-  <li>Call <strong>evens_and_odds(numbers)</strong> using two different predefined lists</li>
-  <li>Print the even list and odd list for each function call</li>
+<li>Call <strong>evens_and_odds(numbers)</strong> using two different predefined lists</li>
+<li>Print the even list and odd list for each function call</li>
 </ul>
 Add comments that label the <strong>input</strong>, <strong>processing</strong>, and <strong>output</strong> parts of your program.`,
 
@@ -198,8 +198,8 @@ Version B: Write <strong>filter_above_50(nums)</strong> to return a new list con
 
 After implementing both versions:
 <ul>
-  <li>Choose which version is better based on <strong>readability</strong> and <strong>efficiency</strong></li>
-  <li>Add a short comment above your preferred version explaining your choice in 1-2 sentences</li>
+<li>Choose which version is better based on <strong>readability</strong> and <strong>efficiency</strong></li>
+<li>Add a short comment above your preferred version explaining your choice in 1-2 sentences</li>
 </ul>`,
 
 `Create a Python program that simulates a simple <strong>class roster manager</strong>. Do <strong>not</strong> use the input() function.
@@ -219,12 +219,12 @@ Use this starting data:
 
 Your program must:
 <ul>
-  <li>Define <strong>add_student(roster, name)</strong> to return an updated roster with the new student</li>
-  <li>Define <strong>remove_student(roster, name)</strong> to remove a student when found and return the updated roster</li>
-  <li>Print a message if the student is not found during removal</li>
-  <li>Define <strong>show_roster(roster)</strong> to print students in alphabetical order and return the sorted roster</li>
-  <li>Use a <strong>main()</strong> function to hold the starting data and process each action in the list</li>
-  <li>End automatically after all actions are processed</li>
+<li>Define <strong>add_student(roster, name)</strong> to return an updated roster with the new student</li>
+<li>Define <strong>remove_student(roster, name)</strong> to remove a student when found and return the updated roster</li>
+<li>Print a message if the student is not found during removal</li>
+<li>Define <strong>show_roster(roster)</strong> to print students in alphabetical order and return the sorted roster</li>
+<li>Use a <strong>main()</strong> function to hold the starting data and process each action in the list</li>
+<li>End automatically after all actions are processed</li>
 </ul>
 Use descriptive function names, parameter names, and variable names.`
 ],
