@@ -447,11 +447,13 @@ function renderQuestions(container, questions, twoInputs = false) {        // ðŸ
   // ===== Question Rendering =====
   questions.forEach((q, i) => {
     questionsMap[i + 1] = q;
+
     const questionDiv = document.createElement("div");
     questionDiv.className = "question-block";
 
-    const questionLabel = document.createElement("h3");
-    questionLabel.textContent = `${i + 1}. ${q}`;
+    const questionLabel = document.createElement("div");
+    questionLabel.className = "question-text";
+    questionLabel.innerHTML = `<strong>${i + 1}.</strong> ${q}`;
     questionDiv.appendChild(questionLabel);
 
     const wordCountDiv = document.createElement("div");
