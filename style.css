@@ -230,3 +230,23 @@ h3 {
   white-space: pre-line;
   font-size: 18px;
 }
+.question-text {
+  white-space: pre-wrap;
+  font-size: 18px;
+  line-height: 1.3;
+  font-weight: 600;
+  margin-bottom: 10px;
+}
+
+.question-text ul {
+  white-space: normal;
+  margin-top: 2px;
+  margin-bottom: 2px;
+  padding-left: 28px;
+}
+
+.question-text li {
+  margin-bottom: 2px;
+  padding-left: 2px;
+  line-height: 1.25;
+}

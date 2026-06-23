@@ -145,18 +145,89 @@ let session2Questions = {
 
 let session3Questions = {
   en: [
-  "Using Python, define a function called greet() that prints a simple message (for example, \"Hello from my function!\").\n\nDefine a second function called farewell() that prints a different message.\n\nCall both functions in the correct way.",
+`Define a Python function called <strong>greet()</strong> that prints a short greeting message.
 
-  "Write a Python script that uses the + operator to combine (concatenate) two strings into a full sentence.\n\nChoose your own variable names.\n\nAdd comments explaining what the + operator does when used with strings and how the program works.",
+Define a second function called <strong>farewell()</strong> that prints a different message.
 
-  "Write a Python function multiply_list(nums) that takes a list of numbers and returns the product of all elements.\n\nUse a loop and a running total variable.\n\nAfter defining the function, call it with at least two different lists and print the results.",
+Call both functions so that both messages are displayed.
 
-  "Write a Python program that reads a list of integers, separates the positive numbers and negative numbers into two new lists, and prints both lists.\n\nUsing comments, divide your code into three sections:\n- data input\n- data processing\n- output",
+Use descriptive function names where appropriate.`,
 
-  "Problem:\nYou are given a list of numbers. Print all numbers that are greater than 50.\n\nVersion A:\nWrite the solution as one block of code using only a loop and an if-statement.\n\nVersion B:\nRewrite the solution using a function named filter_above_50() that takes the list as input and returns a new list containing only the numbers above 50.\n\nThen print the results in a separate output section.\n\nAdd a short explanation via comments judging which structure (single block-Version A vs. function-based design-Version B) is more effective based on criteria such as readability, reuse, and organization.",
+`Create two string variables and assign a different text value to each.
 
-  "Create a Python program that simulates a simple class roster manager without using any input() functions.\n\nYour program should:\n- Start with an empty list representing the class roster.\n\n- Use predefined function calls to:\n 1. Add student names to the list.\n2. Remove a student name if it exists in the list.\n3. Display all current student names in alphabetical order.\n\nUse functions to organize your code (e.g., add_student, remove_student, show_roster), and use a loop that runs through a predefined sequence of operations (for example, a list of actions) to simulate a menu system.\n\nEnd Automatically after all predefined operations have been executed (do not use an exit option)"
-  ],
+Use the <strong>+ operator</strong> to combine the two strings into a third variable, then print the combined result.
+
+Add two comments:
+<ul>
+  <li>One comment explaining how the <strong>+ operator</strong> works with strings</li>
+  <li>One comment explaining how the final combined string is created</li>
+</ul>
+Use descriptive variable names.`,
+
+`Write a Python function called <strong>multiply_list(nums)</strong> that accepts a list of numbers and returns the product of all values in the list.
+
+Your function must:
+<ul>
+  <li>Use a loop</li>
+  <li>Use a running product variable</li>
+  <li>Return the final product</li>
+</ul>
+After defining the function, call it with two different lists and print both results.`,
+
+`Write two Python functions: <strong>evens_and_odds(numbers)</strong> and <strong>main()</strong>.
+
+The <strong>evens_and_odds(numbers)</strong> function must:
+<ul>
+  <li>Create two lists called <strong>evens</strong> and <strong>odds</strong></li>
+  <li>Use a loop to process the original list</li>
+  <li>Use an if statement to determine whether each number is even or odd</li>
+  <li>Return both lists</li>
+</ul>
+The <strong>main()</strong> function must:
+<ul>
+  <li>Call <strong>evens_and_odds(numbers)</strong> using two different predefined lists</li>
+  <li>Print the even list and odd list for each function call</li>
+</ul>
+Add comments that label the <strong>input</strong>, <strong>processing</strong>, and <strong>output</strong> parts of your program.`,
+
+`You are given a list of numbers. Write two Python functions that identify numbers greater than 50.
+
+Version A: Write <strong>print_above_50(nums)</strong> to directly print each number greater than 50.
+
+Version B: Write <strong>filter_above_50(nums)</strong> to return a new list containing only numbers greater than 50. Print the returned list outside the function.
+
+After implementing both versions:
+<ul>
+  <li>Choose which version is better based on <strong>readability</strong> and <strong>efficiency</strong></li>
+  <li>Add a short comment above your preferred version explaining your choice in 1-2 sentences</li>
+</ul>`,
+
+`Create a Python program that simulates a simple <strong>class roster manager</strong>. Do <strong>not</strong> use the input() function.
+
+Use this starting data:
+
+\t1. roster = []
+\t2. actions = [
+\t3.     ["add", "Ashley"],
+\t4.     ["add", "Hayden"],
+\t5.     ["add", "Bob"],
+\t6.     ["show"],
+\t7.     ["remove", "Hayden"],
+\t8.     ["remove", "Claire"],
+\t9.     ["show"]
+\t10. ]
+
+Your program must:
+<ul>
+  <li>Define <strong>add_student(roster, name)</strong> to return an updated roster with the new student</li>
+  <li>Define <strong>remove_student(roster, name)</strong> to remove a student when found and return the updated roster</li>
+  <li>Print a message if the student is not found during removal</li>
+  <li>Define <strong>show_roster(roster)</strong> to print students in alphabetical order and return the sorted roster</li>
+  <li>Use a <strong>main()</strong> function to hold the starting data and process each action in the list</li>
+  <li>End automatically after all actions are processed</li>
+</ul>
+Use descriptive function names, parameter names, and variable names.`
+],
   ko: [
     "어린 시절 살았던 지역을 묘사하십시오 (좋아했던 장소나 지역이 그 이후로 어떻게 변했는지 등에 관하여) (200단어 정도로)",
     "한국 문화를 홍보하는 데 있어 한류의 문화적 중요성을 설명하십시오 (200단어 정도로)",
