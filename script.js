@@ -869,8 +869,7 @@ stopBtn.addEventListener("click", () => {
 const explanationLabel = document.createElement("div");
 explanationLabel.className = "explanation-label";
 explanationLabel.textContent =
-  `For Prompt ${i + 1}, explain line by line what the code does using plain text. ` +
-  `Describe the purpose of each significant line or function.`;
+  `describe the overall goal of the code and the key lines that achieve it. Include exact line numbers based strictly on the displayed code snippet provided. Line numbers match the code exactly as shown (starting at 1), with each visible line corresponding to one number, even if the line is blank or a comment. Do NOT retype, restate, or include any code. Your response must be 15–100 words.`;
 questionDiv.appendChild(explanationLabel);
 
 // --- Explanation Version 1 (new, above) ---
